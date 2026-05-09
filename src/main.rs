@@ -36,7 +36,13 @@ fn main() -> ! {
         .unwrap();
 
     println!("Done!");
-    println!("{}", board.read_time());
 
-    loop {}
+    loop {
+        println!(
+            "[{}]: ALS=0x{:x}, PS=0x{:x}",
+            board.read_time(),
+            board.read_als(),
+            board.read_proximity()
+        );
+    }
 }

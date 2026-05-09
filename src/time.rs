@@ -9,3 +9,9 @@ impl core::fmt::Display for Time {
         write!(f, "{}:{}:{}", self.hours, self.minutes, self.seconds)
     }
 }
+
+impl Time {
+    pub fn to_total_seconds(&self) -> u32 {
+        self.hours as u32 * 3600 + self.minutes as u32 * 60 + self.seconds as u32
+    }
+}

@@ -1,12 +1,12 @@
 use crate::time::Time;
 use embedded_hal::i2c::I2c;
 
-const BM8563_ADDR: u8 = 0x51;
+const ADDR: u8 = 0x51;
 const REG_SECONDS: u8 = 0x02;
 
 pub fn read_time(i2c: &mut impl I2c) -> Time {
     let mut buf = [0u8; 3];
-    i2c.write_read(BM8563_ADDR, &[REG_SECONDS], &mut buf).ok();
+    i2c.write_read(ADDR, &[REG_SECONDS], &mut buf).unwrap();
 
     Time {
         hours: bcd_to_dec(buf[2] & 0x3f),
@@ -17,7 +17,7 @@ pub fn read_time(i2c: &mut impl I2c) -> Time {
 
 pub fn set_time(i2c: &mut impl I2c, time: Time) {
     i2c.write(
-        BM8563_ADDR,
+        ADDR,
         &[
             REG_SECONDS,
             dec_to_bcd(time.seconds),
@@ -25,7 +25,7 @@ pub fn set_time(i2c: &mut impl I2c, time: Time) {
             dec_to_bcd(time.hours),
         ],
     )
-    .ok();
+    .unwrap();
 }
 
 fn bcd_to_dec(bcd: u8) -> u8 {
