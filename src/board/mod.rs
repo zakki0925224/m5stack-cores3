@@ -1,4 +1,4 @@
-use crate::board::display::CoreS3Display;
+use crate::time::Time;
 use esp_hal::{
     i2c::master::{Config as I2cConfig, I2c},
     peripherals::Peripherals,
@@ -6,6 +6,7 @@ use esp_hal::{
 
 pub mod aw9523;
 pub mod axp2101;
+pub mod bm8563;
 pub mod display;
 
 pub fn delay_ms(ms: u32) {
@@ -15,7 +16,8 @@ pub fn delay_ms(ms: u32) {
 }
 
 pub struct CoreS3 {
-    pub display: CoreS3Display,
+    pub display: display::CoreS3Display,
+    i2c: I2c<'static, esp_hal::Blocking>,
 }
 
 impl CoreS3 {
@@ -37,6 +39,14 @@ impl CoreS3 {
             peripherals.GPIO35,
         );
 
-        Self { display }
+        Self { display, i2c }
+    }
+
+    pub fn read_time(&mut self) -> Time {
+        bm8563::read_time(&mut self.i2c)
+    }
+
+    pub fn set_time(&mut self, time: Time) {
+        bm8563::set_time(&mut self.i2c, time);
     }
 }
