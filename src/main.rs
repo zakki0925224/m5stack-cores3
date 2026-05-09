@@ -42,7 +42,7 @@ fn main() -> ! {
         let imu = board.read_imu();
 
         println!(
-            "[{}]: ALS=0x{:x}, PS=0x{:x}, BMV={}mV, BLV={}%, CHG={}, VBUSMV={}mV, ACL: x={}, y={}, z={}, GYR: x={}, y={}, z={}",
+            "[{}]: ALS=0x{:x}, PS=0x{:x}, BMV={}mV, BLV={}%, CHG={}, VBUSMV={}mV, ACL: x={}, y={}, z={}, GYR: x={}, y={}, z={}, MAG: x={}, y={}, z={}",
             board.read_time(),
             board.read_als(),
             board.read_proximity(),
@@ -55,7 +55,10 @@ fn main() -> ! {
             imu.accel.z,
             imu.gyro.x,
             imu.gyro.y,
-            imu.gyro.z
+            imu.gyro.z,
+            imu.mag.x,
+            imu.mag.y,
+            imu.mag.z
         );
     }
 }

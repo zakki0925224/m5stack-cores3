@@ -7,4 +7,5 @@ pub struct Vector3 {
 pub struct Imu {
     pub accel: Vector3,
     pub gyro: Vector3,
+    pub mag: Vector3,
 }

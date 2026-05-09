@@ -8,6 +8,7 @@ pub mod aw9523;
 pub mod axp2101;
 pub mod bm8563;
 pub mod bmi270;
+pub mod bmm150;
 pub mod display;
 pub mod ltr553;
 
@@ -34,7 +35,8 @@ impl CoreS3 {
         // power on all sensors
         axp2101::init(&mut i2c);
 
-        bmi270::init(&mut i2c);
+        let result = bmi270::init(&mut i2c);
+        assert!(result);
 
         let aw9523 = aw9523::Aw9523::init(&mut i2c);
         aw9523.lcd_reset(&mut i2c);

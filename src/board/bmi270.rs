@@ -1,17 +1,26 @@
-use crate::imu::{Imu, Vector3};
+use crate::{
+    board::bmm150,
+    imu::{Imu, Vector3},
+};
 use embedded_hal::i2c::I2c;
 
 const ADDR: u8 = 0x69;
 const REG_CHIP_ID: u8 = 0x00;
+const REG_STATUS: u8 = 0x03;
+const REG_AUX_X_LSB: u8 = 0x04;
 const REG_INTERNAL_STATUS: u8 = 0x21;
-const REG_ACC_X_LSB: u8 = 0x0c;
-const REG_GYR_X_LSB: u8 = 0x12;
-const REG_PWR_CONF: u8 = 0x7c;
-const REG_PWR_CTRL: u8 = 0x7d;
-const REG_CMD: u8 = 0x7e;
+const REG_AUX_DEV_ID: u8 = 0x4b;
+const REG_AUX_IF_CONF: u8 = 0x4c;
+const REG_AUX_RD_ADDR: u8 = 0x4d;
+const REG_AUX_WR_ADDR: u8 = 0x4e;
+const REG_AUX_WR_DATA: u8 = 0x4f;
 const REG_INIT_CTRL: u8 = 0x59;
 const REG_INIT_ADDR_0: u8 = 0x5b;
 const REG_INIT_DATA: u8 = 0x5e;
+const REG_IF_CONF: u8 = 0x6b;
+const REG_PWR_CONF: u8 = 0x7c;
+const REG_PWR_CTRL: u8 = 0x7d;
+const REG_CMD: u8 = 0x7e;
 
 pub fn init(i2c: &mut impl I2c) -> bool {
     if read(i2c, REG_CHIP_ID) != 0x24 {
@@ -37,24 +46,40 @@ pub fn init(i2c: &mut impl I2c) -> bool {
         return false; // not initialized
     }
 
-    // accel + gyro + temp on
-    write(i2c, REG_PWR_CTRL, 0x0e);
+    // AUX setup for BMM150
+    aux_setup_mode(i2c, bmm150::ADDR);
+    aux_write(i2c, bmm150::REG_RESET, bmm150::RESET_CMD);
+    crate::board::delay_ms(10);
+    aux_read(i2c, bmm150::REG_CHIP_ID); // dummy
+    let who_am_i = aux_read(i2c, bmm150::REG_CHIP_ID);
+    if who_am_i == bmm150::WHO_AM_I {
+        aux_write(i2c, bmm150::REG_CTRL, bmm150::NORMAL_MODE);
+        write(i2c, REG_AUX_IF_CONF, 0x4f);
+        write(i2c, REG_AUX_RD_ADDR, bmm150::REG_DATA_X_LSB);
+        write(i2c, REG_PWR_CTRL, 0x0f);
+    }
+
     true
 }
 
 pub fn read_imu(i2c: &mut impl I2c) -> Imu {
-    let mut buf = [0u8; 12];
-    i2c.write_read(ADDR, &[REG_ACC_X_LSB], &mut buf).unwrap();
+    let mut buf = [0u8; 20];
+    i2c.write_read(ADDR, &[REG_AUX_X_LSB], &mut buf).unwrap();
     Imu {
         accel: Vector3 {
-            x: i16::from_le_bytes([buf[0], buf[1]]),
-            y: i16::from_le_bytes([buf[2], buf[3]]),
-            z: i16::from_le_bytes([buf[4], buf[5]]),
+            x: i16::from_le_bytes([buf[8], buf[9]]),
+            y: i16::from_le_bytes([buf[10], buf[11]]),
+            z: i16::from_le_bytes([buf[12], buf[13]]),
         },
         gyro: Vector3 {
-            x: i16::from_le_bytes([buf[6], buf[7]]),
-            y: i16::from_le_bytes([buf[8], buf[9]]),
-            z: i16::from_le_bytes([buf[10], buf[11]]),
+            x: i16::from_le_bytes([buf[14], buf[15]]),
+            y: i16::from_le_bytes([buf[16], buf[17]]),
+            z: i16::from_le_bytes([buf[18], buf[19]]),
+        },
+        mag: {
+            let raw: &[u8; 6] = buf[0..6].try_into().unwrap();
+            let (x, y, z) = bmm150::decode(raw);
+            Vector3 { x, y, z }
         },
     }
 }
@@ -72,6 +97,37 @@ fn upload_config(i2c: &mut impl I2c) {
         i2c.write(ADDR, &buf[..=chunk.len()]).unwrap();
         index += chunk.len();
     }
+}
+
+fn aux_setup_mode(i2c: &mut impl I2c, addr: u8) {
+    write(i2c, REG_IF_CONF, 0x20); // AUX I2C enable
+    write(i2c, REG_PWR_CONF, 0x00); // power save off
+    write(i2c, REG_PWR_CTRL, 0x0e); // AUX disable
+    write(i2c, REG_AUX_IF_CONF, 0x80);
+    write(i2c, REG_AUX_DEV_ID, addr << 1);
+}
+
+fn aux_write(i2c: &mut impl I2c, reg: u8, data: u8) {
+    write(i2c, REG_AUX_WR_DATA, data);
+    write(i2c, REG_AUX_WR_ADDR, reg);
+    for _ in 0..3 {
+        crate::board::delay_ms(1);
+        if read(i2c, REG_STATUS) & 0x04 == 0 {
+            break;
+        }
+    }
+}
+
+fn aux_read(i2c: &mut impl I2c, reg: u8) -> u8 {
+    write(i2c, REG_AUX_IF_CONF, 0x80); // burst length 1
+    write(i2c, REG_AUX_RD_ADDR, reg);
+    for _ in 0..3 {
+        crate::board::delay_ms(1);
+        if read(i2c, REG_STATUS) & 0x04 == 0 {
+            break;
+        }
+    }
+    read(i2c, REG_AUX_X_LSB)
 }
 
 fn write(i2c: &mut impl I2c, reg: u8, val: u8) {
