@@ -9,6 +9,7 @@ pub fn init(i2c: &mut impl I2c) {
     write(i2c, 0x95, 28); // ALDO4 = 3.3V
     write(i2c, 0x99, 28); // DLDO1 = 3.3V (LCD BL)
     write(i2c, 0x90, 0xbf); // enable all LDOs
+    write(i2c, 0x30, 0x0f); // enable ADC channels
 
     // wait for LDOs stabilize
     crate::board::delay_ms(10);
@@ -16,4 +17,30 @@ pub fn init(i2c: &mut impl I2c) {
 
 fn write(i2c: &mut impl I2c, reg: u8, val: u8) {
     i2c.write(ADDR, &[reg, val]).unwrap();
+}
+
+pub fn read_battery_mv(i2c: &mut impl I2c) -> u16 {
+    let mut buf = [0u8; 2];
+    i2c.write_read(ADDR, &[0x34], &mut buf).unwrap();
+    ((buf[0] as u16 & 0x3F) << 8) | buf[1] as u16 // mV
+}
+
+pub fn read_battery_level(i2c: &mut impl I2c) -> i8 {
+    read(i2c, 0xa4) as i8 // 0-100%
+}
+
+pub fn is_charging(i2c: &mut impl I2c) -> bool {
+    read(i2c, 0x01) & 0x04 != 0
+}
+
+pub fn read_vbus_mv(i2c: &mut impl I2c) -> u16 {
+    let mut buf = [0u8; 2];
+    i2c.write_read(ADDR, &[0x38], &mut buf).unwrap();
+    ((buf[0] as u16 & 0x3F) << 8) | buf[1] as u16 // mV
+}
+
+fn read(i2c: &mut impl I2c, reg: u8) -> u8 {
+    let mut buf = [0u8; 1];
+    i2c.write_read(ADDR, &[reg], &mut buf).unwrap();
+    buf[0]
 }

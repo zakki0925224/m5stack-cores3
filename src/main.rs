@@ -13,6 +13,7 @@ use esp_hal::main;
 use esp_println::println;
 
 mod board;
+mod imu;
 mod panic;
 mod time;
 
@@ -38,11 +39,23 @@ fn main() -> ! {
     println!("Done!");
 
     loop {
+        let imu = board.read_imu();
+
         println!(
-            "[{}]: ALS=0x{:x}, PS=0x{:x}",
+            "[{}]: ALS=0x{:x}, PS=0x{:x}, BMV={}mV, BLV={}%, CHG={}, VBUSMV={}mV, ACL: x={}, y={}, z={}, GYR: x={}, y={}, z={}",
             board.read_time(),
             board.read_als(),
-            board.read_proximity()
+            board.read_proximity(),
+            board.read_battery_mv(),
+            board.read_battery_level(),
+            board.is_charging(),
+            board.read_vbus_mv(),
+            imu.accel.x,
+            imu.accel.y,
+            imu.accel.z,
+            imu.gyro.x,
+            imu.gyro.y,
+            imu.gyro.z
         );
     }
 }
