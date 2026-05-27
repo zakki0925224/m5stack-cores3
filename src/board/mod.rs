@@ -1,5 +1,6 @@
 use crate::{imu::Imu, time::Time};
 use esp_hal::{
+    gpio::{DriveMode, Flex, InputConfig, OutputConfig, Pull},
     i2c::master::{Config as I2cConfig, I2c},
     peripherals::Peripherals,
 };
@@ -11,6 +12,7 @@ pub mod bmi270;
 pub mod bmm150;
 pub mod display;
 pub mod ltr553;
+pub mod touch;
 
 pub fn delay_ms(ms: u32) {
     for _ in 0..(ms * 50_000) {
@@ -22,15 +24,52 @@ pub struct CoreS3 {
     pub display: display::CoreS3Display,
     aw9523: aw9523::Aw9523,
     ltr553: ltr553::Ltr553AlsWa,
+    touch: touch::Touch,
     i2c: I2c<'static, esp_hal::Blocking>,
 }
 
 impl CoreS3 {
     pub fn new(peripherals: Peripherals) -> Self {
+        let (i2c_scl, i2c_sda) = {
+            let mut scl = Flex::new(peripherals.GPIO11);
+            let mut sda = Flex::new(peripherals.GPIO12);
+
+            // push-pull output for recovery clocking
+            scl.set_output_enable(true);
+            scl.set_high();
+            sda.set_input_enable(true);
+
+            if sda.is_low() {
+                for _ in 0..9 {
+                    delay_ms(1);
+                    scl.set_low();
+                    delay_ms(1);
+                    scl.set_high();
+                }
+                delay_ms(5);
+            }
+
+            // reconfigure both pins for I2C: open-drain + input + pull-up
+            let od = OutputConfig::default().with_drive_mode(DriveMode::OpenDrain);
+            let pu = InputConfig::default().with_pull(Pull::Up);
+            scl.apply_output_config(&od);
+            scl.apply_input_config(&pu);
+            scl.set_input_enable(true);
+            scl.set_output_enable(true);
+            scl.set_high();
+            sda.apply_output_config(&od);
+            sda.apply_input_config(&pu);
+            sda.set_input_enable(true);
+            sda.set_output_enable(true);
+            sda.set_high();
+
+            (scl, sda)
+        };
+
         let mut i2c = I2c::new(peripherals.I2C0, I2cConfig::default())
             .unwrap()
-            .with_sda(peripherals.GPIO12)
-            .with_scl(peripherals.GPIO11);
+            .with_sda(i2c_sda)
+            .with_scl(i2c_scl);
 
         // power on all sensors
         axp2101::init(&mut i2c);
@@ -50,11 +89,13 @@ impl CoreS3 {
         );
 
         let ltr553 = ltr553::Ltr553AlsWa::init(&mut i2c);
+        let touch = touch::Touch::init(&mut i2c);
 
         Self {
             display,
             aw9523,
             ltr553,
+            touch,
             i2c,
         }
     }
@@ -110,5 +151,9 @@ impl CoreS3 {
 
     pub fn read_imu(&mut self) -> Imu {
         bmi270::read_imu(&mut self.i2c)
+    }
+
+    pub fn read_touch(&mut self) -> Option<touch::TouchPoint> {
+        self.touch.read(&mut self.i2c)
     }
 }

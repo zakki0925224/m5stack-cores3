@@ -39,26 +39,8 @@ fn main() -> ! {
     println!("Done!");
 
     loop {
-        let imu = board.read_imu();
-
-        println!(
-            "[{}]: ALS=0x{:x}, PS=0x{:x}, BMV={}mV, BLV={}%, CHG={}, VBUSMV={}mV, ACL: x={}, y={}, z={}, GYR: x={}, y={}, z={}, MAG: x={}, y={}, z={}",
-            board.read_time(),
-            board.read_als(),
-            board.read_proximity(),
-            board.read_battery_mv(),
-            board.read_battery_level(),
-            board.is_charging(),
-            board.read_vbus_mv(),
-            imu.accel.x,
-            imu.accel.y,
-            imu.accel.z,
-            imu.gyro.x,
-            imu.gyro.y,
-            imu.gyro.z,
-            imu.mag.x,
-            imu.mag.y,
-            imu.mag.z
-        );
+        if let Some(touch_point) = board.read_touch() {
+            println!("[{}]: {:?}", board.read_time(), touch_point);
+        }
     }
 }
