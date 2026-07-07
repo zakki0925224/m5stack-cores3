@@ -1,10 +1,10 @@
-use crate::{
-    board::bmm150,
+﻿use crate::{
+    drivers::bmm150,
     imu::{Imu, Vector3},
 };
 use embedded_hal::i2c::I2c;
 
-const ADDR: u8 = 0x69;
+const ADDR_I2C: u8 = 0x69;
 const REG_CHIP_ID: u8 = 0x00;
 const REG_STATUS: u8 = 0x03;
 const REG_AUX_X_LSB: u8 = 0x04;
@@ -29,27 +29,27 @@ pub fn init(i2c: &mut impl I2c) -> bool {
 
     // soft reset
     write(i2c, REG_CMD, 0xb6);
-    crate::board::delay_ms(10);
+    crate::delay::delay_ms(10);
 
     // disable power save
     write(i2c, REG_PWR_CONF, 0x00);
-    crate::board::delay_ms(1);
+    crate::delay::delay_ms(1);
 
     upload_config(i2c);
 
     // init done
     write(i2c, REG_INIT_CTRL, 0x01);
 
-    crate::board::delay_ms(20);
+    crate::delay::delay_ms(20);
     let status = read(i2c, REG_INTERNAL_STATUS);
     if status & 0x01 == 0 {
         return false; // not initialized
     }
 
     // AUX setup for BMM150
-    aux_setup_mode(i2c, bmm150::ADDR);
+    aux_setup_mode(i2c, bmm150::ADDR_I2C);
     aux_write(i2c, bmm150::REG_RESET, bmm150::RESET_CMD);
-    crate::board::delay_ms(10);
+    crate::delay::delay_ms(10);
     aux_read(i2c, bmm150::REG_CHIP_ID); // dummy
     let who_am_i = aux_read(i2c, bmm150::REG_CHIP_ID);
     if who_am_i == bmm150::WHO_AM_I {
@@ -64,7 +64,8 @@ pub fn init(i2c: &mut impl I2c) -> bool {
 
 pub fn read_imu(i2c: &mut impl I2c) -> Imu {
     let mut buf = [0u8; 20];
-    i2c.write_read(ADDR, &[REG_AUX_X_LSB], &mut buf).unwrap();
+    i2c.write_read(ADDR_I2C, &[REG_AUX_X_LSB], &mut buf)
+        .unwrap();
     Imu {
         accel: Vector3 {
             x: i16::from_le_bytes([buf[8], buf[9]]),
@@ -90,11 +91,11 @@ fn upload_config(i2c: &mut impl I2c) {
     let mut buf = [0u8; CHUNK + 1];
     for chunk in CONFIG.chunks(CHUNK) {
         let addr = [((index / 2) & 0x0f) as u8, (index / 32) as u8];
-        i2c.write(ADDR, &[REG_INIT_ADDR_0, addr[0], addr[1]])
+        i2c.write(ADDR_I2C, &[REG_INIT_ADDR_0, addr[0], addr[1]])
             .unwrap();
         buf[0] = REG_INIT_DATA;
         buf[1..=chunk.len()].copy_from_slice(chunk);
-        i2c.write(ADDR, &buf[..=chunk.len()]).unwrap();
+        i2c.write(ADDR_I2C, &buf[..=chunk.len()]).unwrap();
         index += chunk.len();
     }
 }
@@ -111,7 +112,7 @@ fn aux_write(i2c: &mut impl I2c, reg: u8, data: u8) {
     write(i2c, REG_AUX_WR_DATA, data);
     write(i2c, REG_AUX_WR_ADDR, reg);
     for _ in 0..3 {
-        crate::board::delay_ms(1);
+        crate::delay::delay_ms(1);
         if read(i2c, REG_STATUS) & 0x04 == 0 {
             break;
         }
@@ -122,7 +123,7 @@ fn aux_read(i2c: &mut impl I2c, reg: u8) -> u8 {
     write(i2c, REG_AUX_IF_CONF, 0x80); // burst length 1
     write(i2c, REG_AUX_RD_ADDR, reg);
     for _ in 0..3 {
-        crate::board::delay_ms(1);
+        crate::delay::delay_ms(1);
         if read(i2c, REG_STATUS) & 0x04 == 0 {
             break;
         }
@@ -131,17 +132,17 @@ fn aux_read(i2c: &mut impl I2c, reg: u8) -> u8 {
 }
 
 fn write(i2c: &mut impl I2c, reg: u8, val: u8) {
-    i2c.write(ADDR, &[reg, val]).unwrap();
+    i2c.write(ADDR_I2C, &[reg, val]).unwrap();
 }
 
 fn read(i2c: &mut impl I2c, reg: u8) -> u8 {
     let mut buf = [0u8; 1];
-    i2c.write_read(ADDR, &[reg], &mut buf).unwrap();
+    i2c.write_read(ADDR_I2C, &[reg], &mut buf).unwrap();
     buf[0]
 }
 
 // reference: https://github.com/m5stack/M5Unified/blob/master/src/utility/imu/BMI270_config.inl
-pub static CONFIG: [u8; 8192] = [
+static CONFIG: [u8; 8192] = [
     0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x3d, 0xb1, 0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x91, 0x03,
     0x80, 0x2e, 0xbc, 0xb0, 0x80, 0x2e, 0xa3, 0x03, 0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x00, 0xb0,
     0x50, 0x30, 0x21, 0x2e, 0x59, 0xf5, 0x10, 0x30, 0x21, 0x2e, 0x6a, 0xf5, 0x80, 0x2e, 0x3b, 0x03,

@@ -1,4 +1,4 @@
-pub const ADDR: u8 = 0x10;
+pub const ADDR_I2C: u8 = 0x10;
 pub const REG_CHIP_ID: u8 = 0x40;
 pub const REG_RESET: u8 = 0x4b;
 pub const REG_CTRL: u8 = 0x4c;

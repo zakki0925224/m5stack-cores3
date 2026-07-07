@@ -1,30 +1,21 @@
-use crate::{imu::Imu, time::Time};
+use crate::{
+    delay::delay_ms,
+    drivers::{aw9523, axp2101, bm8563, bmi270, ft6336u, gc0308, ltr553},
+    imu::Imu,
+    time::Time,
+};
 use esp_hal::{
     gpio::{DriveMode, Flex, InputConfig, OutputConfig, Pull},
     i2c::master::{Config as I2cConfig, I2c},
     peripherals::Peripherals,
 };
 
-pub mod aw9523;
-pub mod axp2101;
-pub mod bm8563;
-pub mod bmi270;
-pub mod bmm150;
+pub mod camera;
 pub mod display;
-pub mod ltr553;
-pub mod touch;
-
-pub fn delay_ms(ms: u32) {
-    for _ in 0..(ms * 50_000) {
-        core::hint::black_box(());
-    }
-}
 
 pub struct CoreS3 {
-    pub display: display::CoreS3Display,
-    aw9523: aw9523::Aw9523,
-    ltr553: ltr553::Ltr553AlsWa,
-    touch: touch::Touch,
+    pub display: display::Display,
+    pub camera: camera::Cam,
     i2c: I2c<'static, esp_hal::Blocking>,
 }
 
@@ -74,11 +65,12 @@ impl CoreS3 {
         // power on all sensors
         axp2101::init(&mut i2c);
 
-        let result = bmi270::init(&mut i2c);
-        assert!(result);
+        assert!(bmi270::init(&mut i2c));
 
-        let aw9523 = aw9523::Aw9523::init(&mut i2c);
-        aw9523.lcd_reset(&mut i2c);
+        aw9523::init(&mut i2c);
+        aw9523::reset_lcd(&mut i2c);
+
+        ltr553::init(&mut i2c);
 
         let display = display::init(
             peripherals.SPI2,
@@ -88,14 +80,28 @@ impl CoreS3 {
             peripherals.GPIO35,
         );
 
-        let ltr553 = ltr553::Ltr553AlsWa::init(&mut i2c);
-        let touch = touch::Touch::init(&mut i2c);
+        let camera = camera::init(
+            peripherals.LCD_CAM,
+            peripherals.DMA_CH0,
+            peripherals.GPIO2,
+            peripherals.GPIO45,
+            peripherals.GPIO46,
+            peripherals.GPIO38,
+            peripherals.GPIO39,
+            peripherals.GPIO40,
+            peripherals.GPIO41,
+            peripherals.GPIO42,
+            peripherals.GPIO15,
+            peripherals.GPIO16,
+            peripherals.GPIO48,
+            peripherals.GPIO47,
+        );
+
+        gc0308::init(&mut i2c);
 
         Self {
             display,
-            aw9523,
-            ltr553,
-            touch,
+            camera,
             i2c,
         }
     }
@@ -126,11 +132,11 @@ impl CoreS3 {
     }
 
     pub fn read_als(&mut self) -> u16 {
-        self.ltr553.read_als(&mut self.i2c)
+        ltr553::read_als(&mut self.i2c)
     }
 
     pub fn read_proximity(&mut self) -> u16 {
-        self.ltr553.read_proximity(&mut self.i2c)
+        ltr553::read_proximity(&mut self.i2c)
     }
 
     pub fn read_battery_mv(&mut self) -> u16 {
@@ -153,7 +159,7 @@ impl CoreS3 {
         bmi270::read_imu(&mut self.i2c)
     }
 
-    pub fn read_touch(&mut self) -> Option<touch::TouchPoint> {
-        self.touch.read(&mut self.i2c)
+    pub fn read_touch(&mut self) -> Option<ft6336u::TouchPoint> {
+        ft6336u::read(&mut self.i2c)
     }
 }

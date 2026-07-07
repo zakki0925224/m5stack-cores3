@@ -25,7 +25,7 @@ impl DelayNs for BusyWaitDelay {
 
 static mut SPI_BUF: [u8; 512] = [0u8; 512];
 
-pub type CoreS3Display = mipidsi::Display<
+pub type Display = mipidsi::Display<
     SpiInterface<
         'static,
         ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, BusyWaitDelay>,
@@ -41,7 +41,7 @@ pub fn init(
     sck: esp_hal::peripherals::GPIO36<'static>,
     cs_pin: esp_hal::peripherals::GPIO3<'static>,
     dc_pin: esp_hal::peripherals::GPIO35<'static>,
-) -> CoreS3Display {
+) -> Display {
     let dc = Output::new(dc_pin, Level::Low, OutputConfig::default());
 
     let spi = Spi::new(

@@ -9,10 +9,14 @@ use embedded_graphics::{
     text::Text,
 };
 use esp_hal::clock::CpuClock;
+use esp_hal::dma::DmaRxBuf;
+use esp_hal::dma_buffers;
 use esp_hal::main;
 use esp_println::println;
 
 mod board;
+mod delay;
+mod drivers;
 mod imu;
 mod panic;
 mod time;
@@ -38,9 +42,17 @@ fn main() -> ! {
 
     println!("Done!");
 
+    let (rx_buf, rx_descs, _, _) = dma_buffers!(1024, 0);
+    let dma_rx_buf = DmaRxBuf::new(rx_descs, rx_buf).unwrap();
+    let transfer = board.camera.receive(dma_rx_buf).map_err(|e| e.0).unwrap();
+    let (result, camera, dma_rx_buf) = transfer.wait();
+    result.unwrap();
+    board.camera = camera;
+    println!("{:?}", &dma_rx_buf.as_slice()[..20]);
+
     loop {
-        if let Some(touch_point) = board.read_touch() {
-            println!("[{}]: {:?}", board.read_time(), touch_point);
-        }
+        // if let Some(touch_point) = board.read_touch() {
+        //     println!("[{}]: {:?}", board.read_time(), touch_point);
+        // }
     }
 }
