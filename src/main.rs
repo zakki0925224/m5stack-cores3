@@ -18,6 +18,8 @@ use esp_hal::main;
 mod board;
 mod delay;
 mod drivers;
+mod error;
+mod heap;
 mod imu;
 mod panic;
 mod print;
