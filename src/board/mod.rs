@@ -1,4 +1,5 @@
 use crate::{
+    board::camera::Cam,
     delay::delay_ms,
     drivers::{aw9523, axp2101, bm8563, bmi270, ft6336u, gc0308, ltr553},
     imu::Imu,
@@ -21,6 +22,8 @@ pub struct CoreS3 {
 
 impl CoreS3 {
     pub fn new(peripherals: Peripherals) -> Self {
+        esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
+
         let (i2c_scl, i2c_sda) = {
             let mut scl = Flex::new(peripherals.GPIO11);
             let mut sda = Flex::new(peripherals.GPIO12);
@@ -80,7 +83,7 @@ impl CoreS3 {
             peripherals.GPIO35,
         );
 
-        let camera = camera::init(
+        let camera = Cam::new(
             peripherals.LCD_CAM,
             peripherals.DMA_CH0,
             peripherals.GPIO2,

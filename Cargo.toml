@@ -17,10 +17,13 @@ embedded-hal = "1.0.0"
 mipidsi = "0.10.0"
 embedded-graphics = "0.8.2"
 embedded-hal-bus = "0.3.0"
+esp-alloc = "0.10.0"
 
 
 [profile.dev]
-opt-level = "s"
+codegen-units = 1
+lto           = "fat"
+opt-level     = "s"
 
 [profile.release]
 codegen-units = 1

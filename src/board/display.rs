@@ -47,7 +47,7 @@ pub fn init(
     let spi = Spi::new(
         spi_peripheral,
         SpiConfig::default()
-            .with_frequency(Rate::from_mhz(10))
+            .with_frequency(Rate::from_mhz(27))
             .with_mode(SpiMode::_0),
     )
     .unwrap()
