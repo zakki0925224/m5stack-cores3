@@ -12,7 +12,6 @@ path = "./src/main.rs"
 esp-hal = { version = "~1.1.0", features = ["esp32s3", "unstable"] }
 esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32s3"] }
 critical-section = "1.2.0"
-esp-println = { version = "0.17.0", features = ["esp32s3", "uart"], default-features = false }
 embedded-hal = "1.0.0"
 mipidsi = "0.10.0"
 embedded-graphics = "0.8.2"

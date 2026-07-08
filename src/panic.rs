@@ -1,5 +1,5 @@
+use crate::println;
 use core::panic::PanicInfo;
-use esp_println::println;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {

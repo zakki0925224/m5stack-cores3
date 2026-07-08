@@ -14,13 +14,13 @@ use embedded_graphics::{
 };
 use esp_hal::clock::CpuClock;
 use esp_hal::main;
-use esp_println::println;
 
 mod board;
 mod delay;
 mod drivers;
 mod imu;
 mod panic;
+mod print;
 mod time;
 
 esp_bootloader_esp_idf::esp_app_desc!();

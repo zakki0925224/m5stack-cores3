@@ -13,6 +13,7 @@ use esp_hal::{
 
 pub mod camera;
 pub mod display;
+pub mod uart;
 
 pub struct CoreS3 {
     pub display: display::Display,
