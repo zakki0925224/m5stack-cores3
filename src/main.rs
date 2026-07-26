@@ -3,7 +3,10 @@
 
 extern crate alloc;
 
-use crate::board::camera::*;
+use crate::{
+    board::camera::*,
+    error::{Error, Result},
+};
 use alloc::vec;
 use embedded_graphics::{
     mono_font::{MonoTextStyle, ascii::FONT_10X20},
@@ -41,20 +44,27 @@ fn yuv_to_rgb565(y: u8, cb: u8, cr: u8) -> Rgb565 {
 
 #[main]
 fn main() -> ! {
+    if let Err(e) = run() {
+        panic!("{}", e);
+    }
+    unreachable!();
+}
+
+fn run() -> Result<()> {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    let mut board = board::CoreS3::new(peripherals);
+    let mut board = board::CoreS3::new(peripherals)?;
 
     Rectangle::new(Point::zero(), Size::new(320, 240))
         .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
         .draw(&mut board.display)
-        .unwrap();
+        .map_err(Error::hal)?;
 
     let style = MonoTextStyle::new(&FONT_10X20, Rgb565::WHITE);
     Text::new("Hello, CoreS3!", Point::new(10, 30), style)
         .draw(&mut board.display)
-        .unwrap();
+        .map_err(Error::hal)?;
 
     println!("Done!");
 
@@ -65,7 +75,7 @@ fn main() -> ! {
         //     println!("[{}]: {:?}", board.read_time(), touch_point);
         // }
 
-        let captured = board.camera.capture(&mut frame_buffer);
+        let captured = board.camera.capture(&mut frame_buffer)?;
         let full_source_rows = captured / (FRAME_WIDTH * 2);
         let out_rows = full_source_rows / 2;
         let buf = &frame_buffer[..captured];
@@ -81,6 +91,9 @@ fn main() -> ! {
             Point::zero(),
             Size::new((FRAME_WIDTH / 2) as u32, out_rows as u32),
         );
-        board.display.fill_contiguous(&area, colors).unwrap();
+        board
+            .display
+            .fill_contiguous(&area, colors)
+            .map_err(Error::hal)?;
     }
 }

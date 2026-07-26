@@ -2,6 +2,7 @@ use crate::{
     board::camera::Cam,
     delay::delay_ms,
     drivers::{aw9523, axp2101, bm8563, bmi270, ft6336u, gc0308, ltr553},
+    error::Result,
     heap,
     imu::Imu,
     time::Time,
@@ -23,7 +24,7 @@ pub struct CoreS3 {
 }
 
 impl CoreS3 {
-    pub fn new(peripherals: Peripherals) -> Self {
+    pub fn new(peripherals: Peripherals) -> Result<Self> {
         heap::init_psram(peripherals.PSRAM);
 
         let (i2c_scl, i2c_sda) = {
@@ -62,20 +63,21 @@ impl CoreS3 {
             (scl, sda)
         };
 
-        let mut i2c = I2c::new(peripherals.I2C0, I2cConfig::default())
-            .unwrap()
+        let mut i2c = I2c::new(peripherals.I2C0, I2cConfig::default())?
             .with_sda(i2c_sda)
             .with_scl(i2c_scl);
 
         // power on all sensors
-        axp2101::init(&mut i2c);
+        axp2101::init(&mut i2c)?;
 
-        assert!(bmi270::init(&mut i2c));
+        if bmi270::init(&mut i2c).is_err() {
+            panic!("BMI270 init failed");
+        }
 
-        aw9523::init(&mut i2c);
-        aw9523::reset_lcd(&mut i2c);
+        aw9523::init(&mut i2c)?;
+        aw9523::reset_lcd(&mut i2c)?;
 
-        ltr553::init(&mut i2c);
+        ltr553::init(&mut i2c)?;
 
         let display = display::init(
             peripherals.SPI2,
@@ -83,7 +85,7 @@ impl CoreS3 {
             peripherals.GPIO36,
             peripherals.GPIO3,
             peripherals.GPIO35,
-        );
+        )?;
 
         let camera = Cam::new(
             peripherals.LCD_CAM,
@@ -100,30 +102,30 @@ impl CoreS3 {
             peripherals.GPIO16,
             peripherals.GPIO48,
             peripherals.GPIO47,
-        );
+        )?;
 
-        gc0308::init(&mut i2c);
+        gc0308::init(&mut i2c)?;
 
-        Self {
+        Ok(Self {
             display,
             camera,
             i2c,
-        }
+        })
     }
 
-    pub fn read_time(&mut self) -> Time {
+    pub fn read_time(&mut self) -> Result<Time> {
         bm8563::read_time(&mut self.i2c)
     }
 
-    pub fn set_time(&mut self, time: Time) {
-        bm8563::set_time(&mut self.i2c, time);
+    pub fn set_time(&mut self, time: Time) -> Result<()> {
+        bm8563::set_time(&mut self.i2c, time)
     }
 
-    pub fn wait_seconds(&mut self, seconds: u32) {
-        let start = self.read_time().to_total_seconds();
+    pub fn wait_seconds(&mut self, seconds: u32) -> Result<()> {
+        let start = self.read_time()?.to_total_seconds();
 
         loop {
-            let now = self.read_time().to_total_seconds();
+            let now = self.read_time()?.to_total_seconds();
             let elapsed = if now >= start {
                 now - start
             } else {
@@ -134,33 +136,35 @@ impl CoreS3 {
                 break;
             }
         }
+
+        Ok(())
     }
 
-    pub fn read_als(&mut self) -> u16 {
+    pub fn read_als(&mut self) -> Result<u16> {
         ltr553::read_als(&mut self.i2c)
     }
 
-    pub fn read_proximity(&mut self) -> u16 {
+    pub fn read_proximity(&mut self) -> Result<u16> {
         ltr553::read_proximity(&mut self.i2c)
     }
 
-    pub fn read_battery_mv(&mut self) -> u16 {
+    pub fn read_battery_mv(&mut self) -> Result<u16> {
         axp2101::read_battery_mv(&mut self.i2c)
     }
 
-    pub fn read_battery_level(&mut self) -> i8 {
+    pub fn read_battery_level(&mut self) -> Result<i8> {
         axp2101::read_battery_level(&mut self.i2c)
     }
 
-    pub fn is_charging(&mut self) -> bool {
+    pub fn is_charging(&mut self) -> Result<bool> {
         axp2101::is_charging(&mut self.i2c)
     }
 
-    pub fn read_vbus_mv(&mut self) -> u16 {
+    pub fn read_vbus_mv(&mut self) -> Result<u16> {
         axp2101::read_vbus_mv(&mut self.i2c)
     }
 
-    pub fn read_imu(&mut self) -> Imu {
+    pub fn read_imu(&mut self) -> Result<Imu> {
         bmi270::read_imu(&mut self.i2c)
     }
 

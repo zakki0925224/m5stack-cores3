@@ -1,21 +1,25 @@
-use crate::time::Time;
+use crate::{
+    error::{Error, Result},
+    time::Time,
+};
 use embedded_hal::i2c::I2c;
 
 const ADDR_I2C: u8 = 0x51;
 const REG_SECONDS: u8 = 0x02;
 
-pub fn read_time(i2c: &mut impl I2c) -> Time {
+pub fn read_time(i2c: &mut impl I2c) -> Result<Time> {
     let mut buf = [0u8; 3];
-    i2c.write_read(ADDR_I2C, &[REG_SECONDS], &mut buf).unwrap();
+    i2c.write_read(ADDR_I2C, &[REG_SECONDS], &mut buf)
+        .map_err(Error::hal)?;
 
-    Time {
+    Ok(Time {
         hours: bcd_to_dec(buf[2] & 0x3f),
         minutes: bcd_to_dec(buf[1] & 0x7f),
         seconds: bcd_to_dec(buf[0] & 0x7f),
-    }
+    })
 }
 
-pub fn set_time(i2c: &mut impl I2c, time: Time) {
+pub fn set_time(i2c: &mut impl I2c, time: Time) -> Result<()> {
     i2c.write(
         ADDR_I2C,
         &[
@@ -25,7 +29,9 @@ pub fn set_time(i2c: &mut impl I2c, time: Time) {
             dec_to_bcd(time.hours),
         ],
     )
-    .unwrap();
+    .map_err(Error::hal)?;
+
+    Ok(())
 }
 
 fn bcd_to_dec(bcd: u8) -> u8 {

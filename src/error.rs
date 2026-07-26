@@ -1,4 +1,6 @@
 use crate::heap::AllocationError;
+use alloc::string::String;
+use esp_hal::i2c::master::ConfigError;
 
 macro_rules! impl_from_error {
     ($($variant:ident($error_type:ty)),* $(,)?) => {
@@ -23,6 +25,8 @@ pub enum Error {
     NotInitialized,
     Locked,
     AllocationError(AllocationError),
+    I2cConfig(ConfigError),
+    Hal(String),
 }
 
 impl core::fmt::Display for Error {
@@ -31,15 +35,22 @@ impl core::fmt::Display for Error {
             Self::NotInitialized => write!(f, "Not initialized"),
             Self::Locked => write!(f, "Locked"),
             Self::AllocationError(err) => write!(f, "{}", err),
+            Self::I2cConfig(err) => write!(f, "{}", err),
+            Self::Hal(msg) => write!(f, "{}", msg),
         }
     }
 }
 
 impl_from_error! {
-    AllocationError(AllocationError)
+    AllocationError(AllocationError),
+    I2cConfig(ConfigError),
 }
 
 impl Error {
+    pub fn hal(err: impl core::fmt::Debug) -> Self {
+        Self::Hal(alloc::format!("{:?}", err))
+    }
+
     pub fn with_context(self, context: &'static str) -> Error_ {
         let err: Error_ = self.into();
         err.with_context(context)

@@ -1,3 +1,4 @@
+use crate::error::{Error, Result};
 use esp_hal::{
     dma_rx_stream_buffer,
     lcd_cam::{
@@ -34,11 +35,11 @@ impl Cam {
         d5: GPIO16<'static>,
         d6: GPIO48<'static>,
         d7: GPIO47<'static>,
-    ) -> Self {
+    ) -> Result<Self> {
         let config = Config::default().with_frequency(Rate::from_mhz(20));
         let lcd_cam = LcdCam::new(lcd_cam);
         let cam = Camera::new(lcd_cam.cam, dma_channel, config)
-            .unwrap()
+            .map_err(Error::hal)?
             .with_master_clock(mclk)
             .with_pixel_clock(pclk)
             .with_vsync(vsync)
@@ -51,10 +52,10 @@ impl Cam {
             .with_data5(d5)
             .with_data6(d6)
             .with_data7(d7);
-        Self(Some(cam))
+        Ok(Self(Some(cam)))
     }
 
-    pub fn capture(&mut self, out: &mut [u8]) -> usize {
+    pub fn capture(&mut self, out: &mut [u8]) -> Result<usize> {
         let mut cam = self.take();
         let mut total = 0;
         let mut restarts = 0u32;
@@ -64,7 +65,13 @@ impl Cam {
             // even split across descriptors leaves a remainder and DmaRxStreamBuf
             // rejects it (DmaBufError::InsufficientDescriptors).
             let stream_buf = dma_rx_stream_buffer!(4092 * 64, 4092);
-            let mut transfer = cam.receive(stream_buf).map_err(|e| e.0).unwrap();
+            let mut transfer = match cam.receive(stream_buf) {
+                Ok(transfer) => transfer,
+                Err((e, recovered, _buf)) => {
+                    self.0 = Some(recovered);
+                    return Err(Error::hal(e).into());
+                }
+            };
 
             loop {
                 let (data, ends_with_eof) = transfer.peek_until_eof();
@@ -93,7 +100,7 @@ impl Cam {
                 if ends_with_eof || total >= out.len() {
                     let (c, _) = transfer.stop();
                     self.0 = Some(c);
-                    return total;
+                    return Ok(total);
                 }
             }
         }
