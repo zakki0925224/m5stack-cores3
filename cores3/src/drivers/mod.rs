@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use embedded_hal::i2c::I2c;
 
+pub mod aw88298;
 pub mod aw9523;
 pub mod axp2101;
 pub mod bm8563;

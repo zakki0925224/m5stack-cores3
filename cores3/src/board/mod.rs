@@ -1,7 +1,7 @@
 use crate::{
-    board::camera::Cam,
+    board::{camera::Cam, speaker::Speaker},
     delay::delay_ms,
-    drivers::{aw9523, axp2101, bm8563, bmi270, ft6336u, gc0308, ltr553},
+    drivers::{aw9523, aw88298, axp2101, bm8563, bmi270, ft6336u, gc0308, ltr553},
     error::Result,
     imu::Imu,
     time::Time,
@@ -14,11 +14,13 @@ use esp_hal::{
 
 pub mod camera;
 pub mod display;
+pub mod speaker;
 pub mod uart;
 
 pub struct CoreS3 {
     pub display: display::Display,
     pub camera: camera::Cam,
+    speaker: speaker::Speaker,
     i2c: I2c<'static, esp_hal::Blocking>,
 }
 
@@ -74,9 +76,19 @@ impl CoreS3 {
             camera::FRAME_HEIGHT as u16,
         )?;
 
+        let speaker = Speaker::new(
+            peripherals.I2S0,
+            peripherals.DMA_CH1,
+            peripherals.GPIO34,
+            peripherals.GPIO33,
+            peripherals.GPIO13,
+        )?;
+        aw88298::init(&mut i2c, speaker::SAMPLE_RATE)?;
+
         Ok(Self {
             display,
             camera,
+            speaker,
             i2c,
         })
     }
@@ -138,6 +150,27 @@ impl CoreS3 {
 
     pub fn read_touch(&mut self) -> Result<Option<ft6336u::TouchPoint>> {
         ft6336u::read(&mut self.i2c)
+    }
+
+    pub fn play(&mut self, samples: &[i16]) -> Result<()> {
+        self.speaker.play(&mut self.i2c, samples)
+    }
+
+    pub fn play_iter(&mut self, samples: impl Iterator<Item = i16>) -> Result<()> {
+        self.speaker.play_iter(&mut self.i2c, samples)
+    }
+
+    pub fn tone(&mut self, freq_hz: u32, duration_ms: u32) -> Result<()> {
+        self.speaker.tone(&mut self.i2c, freq_hz, duration_ms)
+    }
+
+    /// 0 = -96dB, 255 = 0dB
+    pub fn set_speaker_volume(&mut self, volume: u8) -> Result<()> {
+        aw88298::set_volume(&mut self.i2c, volume)
+    }
+
+    pub fn set_speaker_mute(&mut self, mute: bool) -> Result<()> {
+        aw88298::set_mute(&mut self.i2c, mute)
     }
 }
 

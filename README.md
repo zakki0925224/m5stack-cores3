@@ -29,7 +29,7 @@ The binary also needs the usual esp-hal setup (not inherited from dependencies):
 - [x] 3-axis Magnetometer (BMM150) - via BMI270 AUX bus
 - [x] Touch input (FT6336U) - capacitive touchscreen
 - [x] Camera (GC0308 0.3MP)
-- [ ] Speaker (AW88298) - 16-bit I2S amplifier
+- [x] Speaker (AW88298) - 16-bit I2S amplifier
 - [ ] Audio Codec (ES7210) - dual-microphone
 - [ ] microSD slot
 
