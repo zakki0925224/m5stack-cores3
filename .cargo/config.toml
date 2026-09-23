@@ -1,3 +1,8 @@
+[target.xtensa-esp32s3-none-elf]
+runner    = "espflash flash --monitor --chip esp32s3"
+rustflags = ["-C", "link-arg=-nostartfiles"]
+
 [alias]
 check-board = "check -p cores3 --all-features --target xtensa-esp32s3-none-elf -Zbuild-std=core,alloc"
 clippy-board = "clippy -p cores3 --all-features --target xtensa-esp32s3-none-elf -Zbuild-std=core,alloc"
+run-board = "run -p cores3 --all-features --release --target xtensa-esp32s3-none-elf -Zbuild-std=core,alloc --example"

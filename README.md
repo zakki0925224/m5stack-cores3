@@ -15,6 +15,7 @@ The binary also needs the usual esp-hal setup (not inherited from dependencies):
 
 - `cargo test` — host tests for `cores3-core`
 - `cargo check-board` — check `cores3` for Xtensa
+- `cargo run-board <example>` — flash an example from `cores3/examples/` and monitor
 
 ## Implementation Status
 
