@@ -68,6 +68,11 @@ impl CoreS3 {
         )?;
 
         gc0308::init(&mut i2c)?;
+        gc0308::set_frame_size(
+            &mut i2c,
+            camera::FRAME_WIDTH as u16,
+            camera::FRAME_HEIGHT as u16,
+        )?;
 
         Ok(Self {
             display,

@@ -1,6 +1,7 @@
 use crate::error::{Error, ErrorKind, Result};
 use esp_hal::{
-    dma_rx_stream_buffer,
+    dma::{DmaDescriptor, DmaRxBuf},
+    dma_buffers,
     lcd_cam::{
         LcdCam,
         cam::{Camera, Config},
@@ -9,15 +10,19 @@ use esp_hal::{
         DMA_CH0, GPIO2, GPIO15, GPIO16, GPIO38, GPIO39, GPIO40, GPIO41, GPIO42, GPIO45, GPIO46,
         GPIO47, GPIO48, LCD_CAM,
     },
-    time::Rate,
+    time::{Duration, Instant, Rate},
 };
 
-// GC0308 default output: full VGA, YUV422 (2 bytes/pixel).
-pub const FRAME_WIDTH: usize = 640;
-pub const FRAME_HEIGHT: usize = 480;
+pub const FRAME_WIDTH: usize = 320;
+pub const FRAME_HEIGHT: usize = 240;
 pub const FRAME_SIZE: usize = FRAME_WIDTH * FRAME_HEIGHT * 2;
 
-pub struct Cam(Option<Camera<'static>>);
+const DMA_BUF_SIZE: usize = FRAME_SIZE + 4092 * 2;
+
+pub struct Cam {
+    cam: Option<Camera<'static>>,
+    buf: Option<DmaRxBuf>,
+}
 
 impl Cam {
     pub fn new(
@@ -52,61 +57,71 @@ impl Cam {
             .with_data5(d5)
             .with_data6(d6)
             .with_data7(d7);
-        Ok(Self(Some(cam)))
+
+        let (rx_buffer, rx_descriptors, _, _) = dma_buffers!(DMA_BUF_SIZE, 0);
+        let buf = DmaRxBuf::new(rx_descriptors, rx_buffer).map_err(Error::hal)?;
+
+        Ok(Self {
+            cam: Some(cam),
+            buf: Some(buf),
+        })
     }
 
     pub fn capture(&mut self, out: &mut [u8]) -> Result<usize> {
-        const MAX_RESTARTS: u32 = 200;
+        const MAX_ATTEMPTS: u32 = 20;
+        const FRAME_TIMEOUT: Duration = Duration::from_millis(1000);
 
         let mut cam = self
-            .0
+            .cam
             .take()
             .expect("camera driver lost by an earlier capture");
-        let mut total = 0;
-        let mut restarts = 0u32;
+        let mut buf = self
+            .buf
+            .take()
+            .expect("camera buffer lost by an earlier capture");
 
-        'restart: loop {
-            let stream_buf = dma_rx_stream_buffer!(4092 * 64, 4092);
-            let mut transfer = match cam.receive(stream_buf) {
+        for _ in 0..MAX_ATTEMPTS {
+            let transfer = match cam.receive(buf) {
                 Ok(transfer) => transfer,
-                Err((e, recovered, _buf)) => {
-                    self.0 = Some(recovered);
+                Err((e, c, b)) => {
+                    self.cam = Some(c);
+                    self.buf = Some(b);
                     return Err(Error::hal(e));
                 }
             };
 
-            loop {
-                let (data, ends_with_eof) = transfer.peek_until_eof();
-                if data.is_empty() {
-                    if transfer.is_done() {
-                        let (c, _) = transfer.stop();
-                        cam = c;
-                        restarts += 1;
-                        if restarts > MAX_RESTARTS {
-                            self.0 = Some(cam);
-                            return Err(Error::from(ErrorKind::Timeout)
-                                .with_context("camera produced no data"));
-                        }
-                        continue 'restart;
-                    }
-                    continue;
-                }
+            let start = Instant::now();
+            while !transfer.is_done() && start.elapsed() < FRAME_TIMEOUT {}
+            let (c, b) = transfer.stop();
+            cam = c;
 
-                restarts = 0;
+            let (descriptors, buffer) = b.split();
+            let frame_len = bytes_until_eof(descriptors);
+            buf = DmaRxBuf::new(descriptors, buffer).map_err(Error::hal)?;
 
-                let n = data.len().min(out.len() - total);
-                out[total..total + n].copy_from_slice(&data[..n]);
-                total += n;
-
-                let peeked = data.len();
-                transfer.consume(peeked);
-
-                if ends_with_eof || total >= out.len() {
-                    let (c, _) = transfer.stop();
-                    self.0 = Some(c);
-                    return Ok(total);
-                }
+            if frame_len == Some(FRAME_SIZE) {
+                let n = FRAME_SIZE.min(out.len());
+                out[..n].copy_from_slice(&buf.as_slice()[..n]);
+                self.cam = Some(cam);
+                self.buf = Some(buf);
+                return Ok(n);
             }
         }
+
+        self.cam = Some(cam);
+        self.buf = Some(buf);
+        Err(Error::from(ErrorKind::Timeout)
+            .with_context("camera could not deliver a complete frame"))
     }
+}
+
+fn bytes_until_eof(descriptors: &[DmaDescriptor]) -> Option<usize> {
+    let mut total = 0;
+    for desc in descriptors {
+        total += desc.len();
+        if desc.flags.suc_eof() {
+            return Some(total);
+        }
+    }
+    None
 }

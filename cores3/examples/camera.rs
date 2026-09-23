@@ -51,21 +51,16 @@ fn run() -> Result<()> {
 
     loop {
         let captured = board.camera.capture(&mut frame_buffer)?;
-        let full_source_rows = captured / (FRAME_WIDTH * 2);
-        let out_rows = full_source_rows / 2;
-        let buf = &frame_buffer[..captured];
+        let rows = (captured / (FRAME_WIDTH * 2)).min(FRAME_HEIGHT);
+        let buf = &frame_buffer[..rows * FRAME_WIDTH * 2];
 
-        let colors = (0..out_rows).flat_map(|out_y| {
-            let row_start = (out_y * 2) * FRAME_WIDTH * 2;
-            (0..FRAME_WIDTH / 2).map(move |out_x| {
-                let i = row_start + out_x * 4;
-                yuv_to_rgb565(buf[i], buf[i + 1], buf[i + 3])
-            })
+        let colors = buf.chunks_exact(4).flat_map(|p| {
+            [
+                yuv_to_rgb565(p[0], p[1], p[3]),
+                yuv_to_rgb565(p[2], p[1], p[3]),
+            ]
         });
-        let area = Rectangle::new(
-            Point::zero(),
-            Size::new((FRAME_WIDTH / 2) as u32, out_rows as u32),
-        );
+        let area = Rectangle::new(Point::zero(), Size::new(FRAME_WIDTH as u32, rows as u32));
         board
             .display
             .fill_contiguous(&area, colors)

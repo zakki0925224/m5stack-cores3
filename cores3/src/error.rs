@@ -6,6 +6,7 @@ use esp_hal::i2c::master::ConfigError;
 pub enum ErrorKind {
     NotInitialized,
     Timeout,
+    InvalidArgument,
     Allocation(AllocationError),
     I2cConfig(ConfigError),
     Hal(String),
@@ -16,6 +17,7 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Self::NotInitialized => write!(f, "Not initialized"),
             Self::Timeout => write!(f, "Timeout"),
+            Self::InvalidArgument => write!(f, "Invalid argument"),
             Self::Allocation(err) => write!(f, "{}", err),
             Self::I2cConfig(err) => write!(f, "{}", err),
             Self::Hal(msg) => write!(f, "{}", msg),

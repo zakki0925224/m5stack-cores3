@@ -1,6 +1,9 @@
-// GC0308 camera sensor (SCCB control only; pixel data goes through LCD_CAM)
+// GC0308 camera sensor
 
-use crate::{delay::delay_ms, error::Result};
+use crate::{
+    delay::delay_ms,
+    error::{Error, ErrorKind, Result},
+};
 use embedded_hal::i2c::I2c;
 
 const ADDR_I2C: u8 = 0x21;
@@ -20,8 +23,161 @@ pub fn init(i2c: &mut impl I2c) -> Result<()> {
     Ok(())
 }
 
+pub const MAX_WIDTH: u16 = 640;
+pub const MAX_HEIGHT: u16 = 480;
+
+struct Subsample {
+    numerator: u32,
+    mode: u8,
+    y0: u8,
+    y1: u8,
+    uv0: u8,
+    uv1: u8,
+}
+
+const SUBSAMPLE_DENOMINATOR: u32 = 420;
+
+#[rustfmt::skip]
+static SUBSAMPLES: &[Subsample] = &[
+    Subsample {
+        numerator: 84,
+        mode: 0x55,
+        y0: 0x00,
+        y1: 0x00,
+        uv0: 0x00,
+        uv1: 0x00,
+    }, // 1/5
+    Subsample {
+        numerator: 105,
+        mode: 0x44,
+        y0: 0x00,
+        y1: 0x00,
+        uv0: 0x00,
+        uv1: 0x00,
+    }, // 1/4
+    Subsample {
+        numerator: 140,
+        mode: 0x33,
+        y0: 0x00,
+        y1: 0x00,
+        uv0: 0x00,
+        uv1: 0x00,
+    }, // 1/3
+    Subsample {
+        numerator: 210,
+        mode: 0x22,
+        y0: 0x00,
+        y1: 0x00,
+        uv0: 0x00,
+        uv1: 0x00,
+    }, // 1/2
+    Subsample {
+        numerator: 240,
+        mode: 0x77,
+        y0: 0x02,
+        y1: 0x46,
+        uv0: 0x02,
+        uv1: 0x46,
+    }, // 4/7
+    Subsample {
+        numerator: 252,
+        mode: 0x55,
+        y0: 0x02,
+        y1: 0x04,
+        uv0: 0x02,
+        uv1: 0x04,
+    }, // 3/5
+    Subsample {
+        numerator: 280,
+        mode: 0x33,
+        y0: 0x02,
+        y1: 0x00,
+        uv0: 0x02,
+        uv1: 0x00,
+    }, // 2/3
+    Subsample {
+        numerator: 420,
+        mode: 0x11,
+        y0: 0x00,
+        y1: 0x00,
+        uv0: 0x00,
+        uv1: 0x00,
+    }, // 1/1
+];
+
+pub fn set_frame_size(i2c: &mut impl I2c, width: u16, height: u16) -> Result<()> {
+    const ROW_START_H: u8 = 0x05;
+    const ROW_START_L: u8 = 0x06;
+    const COL_START_H: u8 = 0x07;
+    const COL_START_L: u8 = 0x08;
+    const WIN_HEIGHT_H: u8 = 0x09;
+    const WIN_HEIGHT_L: u8 = 0x0a;
+    const WIN_WIDTH_H: u8 = 0x0b;
+    const WIN_WIDTH_L: u8 = 0x0c;
+    // page 1
+    const SUBSAMPLE_EN: u8 = 0x53; // bit7
+    const SUBSAMPLE_MODE: u8 = 0x54;
+    const SUBSAMPLE_EN2: u8 = 0x55; // bit0
+    const SUBSAMPLE_Y0: u8 = 0x56;
+    const SUBSAMPLE_Y1: u8 = 0x57;
+    const SUBSAMPLE_UV0: u8 = 0x58;
+    const SUBSAMPLE_UV1: u8 = 0x59;
+
+    if width == 0 || height == 0 || width > MAX_WIDTH || height > MAX_HEIGHT {
+        return Err(Error::from(ErrorKind::InvalidArgument)
+            .with_context("gc0308 frame size must be within 1x1..=640x480"));
+    }
+
+    let (w, h) = (width as u32, height as u32);
+    let (max_w, max_h) = (MAX_WIDTH as u32, MAX_HEIGHT as u32);
+    let cfg = SUBSAMPLES
+        .iter()
+        .find(|c| {
+            max_w * c.numerator / SUBSAMPLE_DENOMINATOR >= w
+                && max_h * c.numerator / SUBSAMPLE_DENOMINATOR >= h
+        })
+        .unwrap_or(&SUBSAMPLES[SUBSAMPLES.len() - 1]);
+
+    let win_w = (w * SUBSAMPLE_DENOMINATOR / cfg.numerator) as u16;
+    let win_h = (h * SUBSAMPLE_DENOMINATOR / cfg.numerator) as u16;
+    let row_s = (MAX_HEIGHT - win_h) / 2;
+    let col_s = (MAX_WIDTH - win_w) / 2;
+    let [win_h_h, win_h_l] = (win_h + 8).to_be_bytes();
+    let [win_w_h, win_w_l] = (win_w + 8).to_be_bytes();
+    let [row_s_h, row_s_l] = row_s.to_be_bytes();
+    let [col_s_h, col_s_l] = col_s.to_be_bytes();
+
+    write(i2c, REG_RESET_RELATED, 0x00)?;
+    write(i2c, ROW_START_H, row_s_h)?;
+    write(i2c, ROW_START_L, row_s_l)?;
+    write(i2c, COL_START_H, col_s_h)?;
+    write(i2c, COL_START_L, col_s_l)?;
+    write(i2c, WIN_HEIGHT_H, win_h_h)?;
+    write(i2c, WIN_HEIGHT_L, win_h_l)?;
+    write(i2c, WIN_WIDTH_H, win_w_h)?;
+    write(i2c, WIN_WIDTH_L, win_w_l)?;
+
+    write(i2c, REG_RESET_RELATED, 0x01)?;
+    let v = read(i2c, SUBSAMPLE_EN)?;
+    write(i2c, SUBSAMPLE_EN, v | 0x80)?;
+    let v = read(i2c, SUBSAMPLE_EN2)?;
+    write(i2c, SUBSAMPLE_EN2, v | 0x01)?;
+    write(i2c, SUBSAMPLE_MODE, cfg.mode)?;
+    write(i2c, SUBSAMPLE_Y0, cfg.y0)?;
+    write(i2c, SUBSAMPLE_Y1, cfg.y1)?;
+    write(i2c, SUBSAMPLE_UV0, cfg.uv0)?;
+    write(i2c, SUBSAMPLE_UV1, cfg.uv1)?;
+    write(i2c, REG_RESET_RELATED, 0x00)?;
+
+    Ok(())
+}
+
 fn write(i2c: &mut impl I2c, reg: u8, val: u8) -> Result<()> {
     super::write_reg(i2c, ADDR_I2C, reg, val)
+}
+
+fn read(i2c: &mut impl I2c, reg: u8) -> Result<u8> {
+    super::read_reg(i2c, ADDR_I2C, reg)
 }
 
 // reference: https://github.com/espressif/esp32-camera/blob/master/sensors/private_include/gc0308_settings.h
