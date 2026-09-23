@@ -1,5 +1,7 @@
-use crate::error::{Error, Result};
-use embedded_hal::delay::DelayNs;
+use crate::{
+    delay::BusyWait,
+    error::{Error, Result},
+};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_hal::{
     gpio::{Level, Output, OutputConfig},
@@ -14,22 +16,12 @@ use mipidsi::{
     options::{ColorInversion, ColorOrder},
 };
 
-pub struct BusyWaitDelay;
-
-impl DelayNs for BusyWaitDelay {
-    fn delay_ns(&mut self, ns: u32) {
-        for _ in 0..(ns / 20) {
-            core::hint::black_box(());
-        }
-    }
-}
-
 static mut SPI_BUF: [u8; 512] = [0u8; 512];
 
 pub type Display = mipidsi::Display<
     SpiInterface<
         'static,
-        ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, BusyWaitDelay>,
+        ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, BusyWait>,
         Output<'static>,
     >,
     ILI9342CRgb565,
@@ -56,19 +48,14 @@ pub fn init(
     .with_sck(sck);
 
     let cs = Output::new(cs_pin, Level::High, OutputConfig::default());
-    // ExclusiveDevice::new can only fail via the CS pin's error type, which is
-    // Infallible for esp_hal's Output -- this can never actually return Err.
-    let spi_device = ExclusiveDevice::new(spi, cs, BusyWaitDelay).unwrap();
+    let spi_device = ExclusiveDevice::new(spi, cs, BusyWait).unwrap();
 
-    // SPI_BUF is a non-null static, so this pointer-to-reference conversion can't fail.
-    let buf = unsafe { (&raw mut SPI_BUF).as_mut().unwrap() };
+    let buf = unsafe { &mut *(&raw mut SPI_BUF) };
     let spi_interface = SpiInterface::new(spi_device, dc, buf);
 
-    let display = Builder::new(ILI9342CRgb565, spi_interface)
+    Builder::new(ILI9342CRgb565, spi_interface)
         .color_order(ColorOrder::Bgr)
         .invert_colors(ColorInversion::Inverted)
-        .init(&mut BusyWaitDelay)
-        .map_err(Error::hal)?;
-
-    Ok(display)
+        .init(&mut BusyWait)
+        .map_err(Error::hal)
 }

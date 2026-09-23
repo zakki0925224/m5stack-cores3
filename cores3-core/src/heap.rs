@@ -1,11 +1,12 @@
-use crate::error::Result;
 use core::{
     alloc::{GlobalAlloc, Layout},
     cell::RefCell,
     ptr::{self, NonNull},
 };
 
-#[derive(Debug)]
+type Result<T> = core::result::Result<T, AllocationError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AllocationError {
     InvalidLayout(Layout),
     InvalidNode,
@@ -315,7 +316,7 @@ impl Cursor {
                 let node_u8 = node_u8 as *const u8;
                 assert!(node_u8.wrapping_add(node_size) <= next.as_ptr().cast::<u8>());
             } else {
-                return Err(AllocationError::InvalidNode.into());
+                return Err(AllocationError::InvalidNode);
             }
         }
 
@@ -471,11 +472,11 @@ fn dealloc(list: &mut HoleList, addr: *mut u8, size: usize) -> Result<()> {
 
     let (cursor, n) = match cursor.try_insert_back(hole, list.bottom) {
         Ok(cursor) => (cursor, 1),
-        Err(mut curosr) => {
-            while let Err(_) = curosr.try_insert_after(hole) {
-                curosr = curosr.next().ok_or(AllocationError::NoNextCursor)?;
+        Err(mut cursor) => {
+            while cursor.try_insert_after(hole).is_err() {
+                cursor = cursor.next().ok_or(AllocationError::NoNextCursor)?;
             }
-            (curosr, 2)
+            (cursor, 2)
         }
     };
     cursor.try_merge_next_n(n);
@@ -507,22 +508,111 @@ unsafe impl GlobalAlloc for LinkedListAllocator {
 }
 
 impl LinkedListAllocator {
-    const fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             heap: RefCell::new(Heap::empty()),
         }
     }
 
-    pub fn init(&self, heap_bottom: *mut u8, size: usize) {
+    pub unsafe fn init(&self, heap_bottom: *mut u8, size: usize) {
         unsafe { self.heap.borrow_mut().init(heap_bottom, size) };
+    }
+
+    pub fn used(&self) -> usize {
+        self.heap.borrow().used
     }
 }
 
-#[global_allocator]
-static ALLOCATOR: LinkedListAllocator = LinkedListAllocator::empty();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn init_psram(psram: esp_hal::peripherals::PSRAM<'static>) {
-    let psram = esp_hal::psram::Psram::new(psram, esp_hal::psram::PsramConfig::default());
-    let (start, size) = psram.raw_parts();
-    ALLOCATOR.init(start, size);
+    use std::boxed::Box;
+
+    #[repr(align(16))]
+    struct Arena([u8; 4096]);
+
+    fn arena() -> (LinkedListAllocator, Box<Arena>) {
+        let allocator = LinkedListAllocator::empty();
+        let mut memory = Box::new(Arena([0u8; 4096]));
+        unsafe { allocator.init(memory.0.as_mut_ptr(), memory.0.len()) };
+        (allocator, memory)
+    }
+
+    #[test]
+    fn alloc_returns_aligned_in_range_pointers() {
+        let (allocator, memory) = arena();
+        let bottom = memory.0.as_ptr() as usize;
+        let top = bottom + memory.0.len();
+
+        for align in [1usize, 2, 4, 8, 16, 32, 64] {
+            let layout = Layout::from_size_align(64, align).unwrap();
+            let ptr = unsafe { allocator.alloc(layout) };
+            assert!(!ptr.is_null(), "align={align}");
+            assert_eq!(ptr as usize % align, 0, "align={align}");
+            assert!((ptr as usize) >= bottom && (ptr as usize) + 64 <= top);
+        }
+    }
+
+    #[test]
+    fn writes_through_the_returned_pointer_survive() {
+        let (allocator, _memory) = arena();
+        let layout = Layout::from_size_align(256, 8).unwrap();
+        let ptr = unsafe { allocator.alloc(layout) };
+        assert!(!ptr.is_null());
+
+        unsafe {
+            for i in 0..256 {
+                ptr.add(i).write(i as u8);
+            }
+            for i in 0..256 {
+                assert_eq!(ptr.add(i).read(), i as u8);
+            }
+            allocator.dealloc(ptr, layout);
+        }
+    }
+
+    #[test]
+    fn dealloc_returns_the_space_to_the_free_list() {
+        let (allocator, _memory) = arena();
+        let layout = Layout::from_size_align(512, 8).unwrap();
+
+        let first = unsafe { allocator.alloc(layout) };
+        assert!(!first.is_null());
+        assert_eq!(allocator.used(), 512);
+        unsafe { allocator.dealloc(first, layout) };
+        assert_eq!(allocator.used(), 0);
+
+        // first-fit must reuse the freed hole
+        let second = unsafe { allocator.alloc(layout) };
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn adjacent_holes_merge_so_a_large_block_fits_again() {
+        let (allocator, _memory) = arena();
+        let layout = Layout::from_size_align(1024, 8).unwrap();
+
+        let a = unsafe { allocator.alloc(layout) };
+        let b = unsafe { allocator.alloc(layout) };
+        let c = unsafe { allocator.alloc(layout) };
+        assert!(!a.is_null() && !b.is_null() && !c.is_null());
+
+        unsafe {
+            allocator.dealloc(a, layout);
+            allocator.dealloc(b, layout);
+            allocator.dealloc(c, layout);
+        }
+        assert_eq!(allocator.used(), 0);
+
+        let big = Layout::from_size_align(3072, 8).unwrap();
+        assert!(!unsafe { allocator.alloc(big) }.is_null());
+    }
+
+    #[test]
+    fn exhaustion_returns_null_instead_of_looping() {
+        let (allocator, _memory) = arena();
+        let layout = Layout::from_size_align(8192, 8).unwrap();
+        assert!(unsafe { allocator.alloc(layout) }.is_null());
+    }
 }

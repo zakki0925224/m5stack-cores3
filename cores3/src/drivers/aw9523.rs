@@ -1,20 +1,16 @@
-use crate::error::{Error, Result};
+// AW9523B I/O expander
+
+use crate::{delay::delay_ms, error::Result};
 use embedded_hal::i2c::I2c;
 
 const ADDR_I2C: u8 = 0x58;
-pub const REG_OUTPUT_P0: u8 = 0x02;
-pub const REG_OUTPUT_P1: u8 = 0x03;
-pub const REG_CONFIG_P0: u8 = 0x04;
-pub const REG_CONFIG_P1: u8 = 0x05;
-pub const REG_GCR: u8 = 0x11;
-
-pub const REG_LEDMODE_P0: u8 = 0x12;
-pub const REG_LEDMODE_P1: u8 = 0x13;
-
-pub fn write(i2c: &mut impl I2c, reg: u8, val: u8) -> Result<()> {
-    i2c.write(ADDR_I2C, &[reg, val]).map_err(Error::hal)?;
-    Ok(())
-}
+const REG_OUTPUT_P0: u8 = 0x02;
+const REG_OUTPUT_P1: u8 = 0x03;
+const REG_CONFIG_P0: u8 = 0x04;
+const REG_CONFIG_P1: u8 = 0x05;
+const REG_GCR: u8 = 0x11;
+const REG_LEDMODE_P0: u8 = 0x12;
+const REG_LEDMODE_P1: u8 = 0x13;
 
 pub fn init(i2c: &mut impl I2c) -> Result<()> {
     // set output levels first so TP_RST/LCD_RST don't glitch low once enabled below
@@ -34,8 +30,12 @@ pub fn init(i2c: &mut impl I2c) -> Result<()> {
 
 pub fn reset_lcd(i2c: &mut impl I2c) -> Result<()> {
     write(i2c, REG_OUTPUT_P1, 0x00)?;
-    crate::delay::delay_ms(50);
+    delay_ms(50);
     write(i2c, REG_OUTPUT_P1, 0x03)?;
-    crate::delay::delay_ms(200);
+    delay_ms(200);
     Ok(())
+}
+
+fn write(i2c: &mut impl I2c, reg: u8, val: u8) -> Result<()> {
+    super::write_reg(i2c, ADDR_I2C, reg, val)
 }

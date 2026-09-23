@@ -1,4 +1,6 @@
-use crate::error::{Error, Result};
+// GC0308 camera sensor (SCCB control only; pixel data goes through LCD_CAM)
+
+use crate::{delay::delay_ms, error::Result};
 use embedded_hal::i2c::I2c;
 
 const ADDR_I2C: u8 = 0x21;
@@ -6,12 +8,12 @@ const REG_RESET_RELATED: u8 = 0xfe;
 
 pub fn init(i2c: &mut impl I2c) -> Result<()> {
     write(i2c, REG_RESET_RELATED, 0xf0)?;
-    crate::delay::delay_ms(80);
+    delay_ms(80);
 
-    for pair in CONFIG {
-        write(i2c, pair[0], pair[1])?;
+    for &[reg, val] in CONFIG {
+        write(i2c, reg, val)?;
     }
-    crate::delay::delay_ms(80);
+    delay_ms(80);
 
     write(i2c, REG_RESET_RELATED, 0x00)?;
 
@@ -19,8 +21,7 @@ pub fn init(i2c: &mut impl I2c) -> Result<()> {
 }
 
 fn write(i2c: &mut impl I2c, reg: u8, val: u8) -> Result<()> {
-    i2c.write(ADDR_I2C, &[reg, val]).map_err(Error::hal)?;
-    Ok(())
+    super::write_reg(i2c, ADDR_I2C, reg, val)
 }
 
 // reference: https://github.com/espressif/esp32-camera/blob/master/sensors/private_include/gc0308_settings.h

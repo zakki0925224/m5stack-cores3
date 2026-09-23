@@ -1,29 +1,18 @@
-[package]
+[workspace]
+default-members = ["cores3-core"]
+members         = ["cores3", "cores3-core"]
+resolver        = "3"
+
+[workspace.package]
 edition      = "2024"
-name         = "m5stack-cores3"
 rust-version = "1.88"
 version      = "0.1.0"
 
-[[bin]]
-name = "m5stack-cores3"
-path = "./src/main.rs"
+[workspace.dependencies]
+cores3-core = { path = "cores3-core", version = "0.1.0" }
 
-[dependencies]
-esp-hal = { version = "~1.1.0", features = ["esp32s3", "unstable"] }
-esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32s3"] }
-embedded-hal = "1.0.0"
-mipidsi = "0.10.0"
 embedded-graphics = "0.8.2"
-embedded-hal-bus = "0.3.0"
-
-
-[profile.dev]
-codegen-units = 1
-lto           = "fat"
-opt-level     = "s"
-
-[profile.release]
-codegen-units = 1
-debug         = 2
-lto           = 'fat'
-opt-level     = 's'
+embedded-hal      = "1.0.0"
+embedded-hal-bus  = "0.3.0"
+esp-hal           = { version = "~1.1.0", features = ["esp32s3", "unstable"] }
+mipidsi           = "0.10.0"

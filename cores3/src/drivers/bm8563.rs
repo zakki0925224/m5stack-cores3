@@ -1,6 +1,8 @@
+// BM8563 RTC
+
 use crate::{
     error::{Error, Result},
-    time::Time,
+    time::{Time, bcd_to_dec, dec_to_bcd},
 };
 use embedded_hal::i2c::I2c;
 
@@ -9,8 +11,7 @@ const REG_SECONDS: u8 = 0x02;
 
 pub fn read_time(i2c: &mut impl I2c) -> Result<Time> {
     let mut buf = [0u8; 3];
-    i2c.write_read(ADDR_I2C, &[REG_SECONDS], &mut buf)
-        .map_err(Error::hal)?;
+    super::read_regs(i2c, ADDR_I2C, REG_SECONDS, &mut buf)?;
 
     Ok(Time {
         hours: bcd_to_dec(buf[2] & 0x3f),
@@ -20,6 +21,7 @@ pub fn read_time(i2c: &mut impl I2c) -> Result<Time> {
 }
 
 pub fn set_time(i2c: &mut impl I2c, time: Time) -> Result<()> {
+    // burst write seconds/minutes/hours from REG_SECONDS
     i2c.write(
         ADDR_I2C,
         &[
@@ -29,14 +31,5 @@ pub fn set_time(i2c: &mut impl I2c, time: Time) -> Result<()> {
             dec_to_bcd(time.hours),
         ],
     )
-    .map_err(Error::hal)?;
-
-    Ok(())
-}
-
-fn bcd_to_dec(bcd: u8) -> u8 {
-    (bcd >> 4) * 10 + (bcd & 0x0f)
-}
-fn dec_to_bcd(dec: u8) -> u8 {
-    ((dec / 10) << 4) | (dec % 10)
+    .map_err(Error::hal)
 }

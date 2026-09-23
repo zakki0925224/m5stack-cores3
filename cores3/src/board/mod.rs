@@ -3,14 +3,13 @@ use crate::{
     delay::delay_ms,
     drivers::{aw9523, axp2101, bm8563, bmi270, ft6336u, gc0308, ltr553},
     error::Result,
-    heap,
     imu::Imu,
     time::Time,
 };
 use esp_hal::{
     gpio::{DriveMode, Flex, InputConfig, OutputConfig, Pull},
     i2c::master::{Config as I2cConfig, I2c},
-    peripherals::Peripherals,
+    peripherals::{GPIO11, GPIO12, Peripherals},
 };
 
 pub mod camera;
@@ -25,54 +24,18 @@ pub struct CoreS3 {
 
 impl CoreS3 {
     pub fn new(peripherals: Peripherals) -> Result<Self> {
-        heap::init_psram(peripherals.PSRAM);
+        #[cfg(feature = "global-alloc")]
+        crate::heap::init_psram(peripherals.PSRAM);
 
-        let (i2c_scl, i2c_sda) = {
-            let mut scl = Flex::new(peripherals.GPIO11);
-            let mut sda = Flex::new(peripherals.GPIO12);
-
-            // push-pull output for recovery clocking
-            scl.set_output_enable(true);
-            scl.set_high();
-            sda.set_input_enable(true);
-
-            if sda.is_low() {
-                for _ in 0..9 {
-                    delay_ms(1);
-                    scl.set_low();
-                    delay_ms(1);
-                    scl.set_high();
-                }
-                delay_ms(5);
-            }
-
-            // reconfigure both pins for I2C: open-drain + input + pull-up
-            let od = OutputConfig::default().with_drive_mode(DriveMode::OpenDrain);
-            let pu = InputConfig::default().with_pull(Pull::Up);
-            scl.apply_output_config(&od);
-            scl.apply_input_config(&pu);
-            scl.set_input_enable(true);
-            scl.set_output_enable(true);
-            scl.set_high();
-            sda.apply_output_config(&od);
-            sda.apply_input_config(&pu);
-            sda.set_input_enable(true);
-            sda.set_output_enable(true);
-            sda.set_high();
-
-            (scl, sda)
-        };
-
+        let (scl, sda) = recover_i2c_bus(peripherals.GPIO11, peripherals.GPIO12);
         let mut i2c = I2c::new(peripherals.I2C0, I2cConfig::default())?
-            .with_sda(i2c_sda)
-            .with_scl(i2c_scl);
+            .with_sda(sda)
+            .with_scl(scl);
 
         // power on all sensors
         axp2101::init(&mut i2c)?;
 
-        if bmi270::init(&mut i2c).is_err() {
-            panic!("BMI270 init failed");
-        }
+        bmi270::init(&mut i2c)?;
 
         aw9523::init(&mut i2c)?;
         aw9523::reset_lcd(&mut i2c)?;
@@ -168,7 +131,39 @@ impl CoreS3 {
         bmi270::read_imu(&mut self.i2c)
     }
 
-    pub fn read_touch(&mut self) -> Option<ft6336u::TouchPoint> {
+    pub fn read_touch(&mut self) -> Result<Option<ft6336u::TouchPoint>> {
         ft6336u::read(&mut self.i2c)
     }
+}
+
+fn recover_i2c_bus(scl: GPIO11<'static>, sda: GPIO12<'static>) -> (Flex<'static>, Flex<'static>) {
+    let mut scl = Flex::new(scl);
+    let mut sda = Flex::new(sda);
+
+    // push-pull output for recovery clocking
+    scl.set_output_enable(true);
+    scl.set_high();
+    sda.set_input_enable(true);
+
+    if sda.is_low() {
+        for _ in 0..9 {
+            delay_ms(1);
+            scl.set_low();
+            delay_ms(1);
+            scl.set_high();
+        }
+        delay_ms(5);
+    }
+
+    let od = OutputConfig::default().with_drive_mode(DriveMode::OpenDrain);
+    let pu = InputConfig::default().with_pull(Pull::Up);
+    for pin in [&mut scl, &mut sda] {
+        pin.apply_output_config(&od);
+        pin.apply_input_config(&pu);
+        pin.set_input_enable(true);
+        pin.set_output_enable(true);
+        pin.set_high();
+    }
+
+    (scl, sda)
 }

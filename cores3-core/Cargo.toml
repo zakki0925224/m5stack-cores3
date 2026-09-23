@@ -1,0 +1,8 @@
+[package]
+edition.workspace      = true
+name                   = "cores3-core"
+rust-version.workspace = true
+version.workspace      = true
+
+[dependencies]
+embedded-graphics.workspace = true

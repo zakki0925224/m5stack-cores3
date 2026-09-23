@@ -1,0 +1,18 @@
+[package]
+edition.workspace      = true
+name                   = "cores3"
+rust-version.workspace = true
+version.workspace      = true
+
+[features]
+default       = []
+global-alloc  = []
+panic-handler = []
+
+[dependencies]
+cores3-core.workspace       = true
+embedded-graphics.workspace = true
+embedded-hal.workspace      = true
+embedded-hal-bus.workspace  = true
+esp-hal.workspace           = true
+mipidsi.workspace           = true

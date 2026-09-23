@@ -1,5 +1,21 @@
 # m5stack-cores3
 
+Board support for the M5Stack CoreS3, built from scratch on `esp-hal`.
+
+## Usage
+
+```toml
+[dependencies]
+cores3 = { git = "https://github.com/zakki0925224/m5stack-cores3", features = ["global-alloc", "panic-handler"] }
+```
+
+The binary also needs the usual esp-hal setup (not inherited from dependencies): `rust-toolchain.toml` (`channel = "esp"`), `.cargo/config.toml` (Xtensa target, `build-std`), and `build.rs` (`-Tlinkall.x`).
+
+## Development
+
+- `cargo test` — host tests for `cores3-core`
+- `cargo check-board` — check `cores3` for Xtensa
+
 ## Implementation Status
 
 ### Sensors & Peripherals

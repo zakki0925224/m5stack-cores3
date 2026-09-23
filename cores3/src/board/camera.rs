@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorKind, Result};
 use esp_hal::{
     dma_rx_stream_buffer,
     lcd_cam::{
@@ -56,20 +56,22 @@ impl Cam {
     }
 
     pub fn capture(&mut self, out: &mut [u8]) -> Result<usize> {
-        let mut cam = self.take();
+        const MAX_RESTARTS: u32 = 200;
+
+        let mut cam = self
+            .0
+            .take()
+            .expect("camera driver lost by an earlier capture");
         let mut total = 0;
         let mut restarts = 0u32;
 
         'restart: loop {
-            // Size must be an exact multiple of the chunk size -- otherwise the
-            // even split across descriptors leaves a remainder and DmaRxStreamBuf
-            // rejects it (DmaBufError::InsufficientDescriptors).
             let stream_buf = dma_rx_stream_buffer!(4092 * 64, 4092);
             let mut transfer = match cam.receive(stream_buf) {
                 Ok(transfer) => transfer,
                 Err((e, recovered, _buf)) => {
                     self.0 = Some(recovered);
-                    return Err(Error::hal(e).into());
+                    return Err(Error::hal(e));
                 }
             };
 
@@ -77,12 +79,14 @@ impl Cam {
                 let (data, ends_with_eof) = transfer.peek_until_eof();
                 if data.is_empty() {
                     if transfer.is_done() {
-                        restarts += 1;
-                        if restarts > 200 {
-                            panic!("camera produced no data after many restarts");
-                        }
                         let (c, _) = transfer.stop();
                         cam = c;
+                        restarts += 1;
+                        if restarts > MAX_RESTARTS {
+                            self.0 = Some(cam);
+                            return Err(Error::from(ErrorKind::Timeout)
+                                .with_context("camera produced no data"));
+                        }
                         continue 'restart;
                     }
                     continue;
@@ -104,9 +108,5 @@ impl Cam {
                 }
             }
         }
-    }
-
-    fn take(&mut self) -> Camera<'static> {
-        self.0.take().unwrap()
     }
 }
