@@ -1,5 +1,6 @@
 // M5Stack Unit ByteButton (U192)
 
+use crate::read_reg;
 use embedded_hal::i2c::I2c;
 
 pub const DEFAULT_ADDR: u8 = 0x47;
@@ -31,12 +32,6 @@ pub fn set_brightness<I: I2c>(i2c: &mut I, addr: u8, led: u8, val: u8) -> Result
 pub fn set_rgb888<I: I2c>(i2c: &mut I, addr: u8, led: u8, rgb: u32) -> Result<(), I::Error> {
     let [b0, b1, b2, b3] = rgb.to_le_bytes();
     i2c.write(addr, &[REG_RGB888 + led * 4, b0, b1, b2, b3])
-}
-
-fn read_reg<I: I2c>(i2c: &mut I, addr: u8, reg: u8) -> Result<u8, I::Error> {
-    let mut buf = [0u8; 1];
-    i2c.write_read(addr, &[reg], &mut buf)?;
-    Ok(buf[0])
 }
 
 #[cfg(test)]

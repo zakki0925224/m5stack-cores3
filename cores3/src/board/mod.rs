@@ -193,6 +193,12 @@ impl CoreS3 {
     pub fn port_c(&mut self) -> &mut Uart<'static, esp_hal::Blocking> {
         &mut self.port_c
     }
+
+    /// I2C on the M-Bus (e.g. Faces3 panels). This is the internal bus: the on-board chips
+    /// (AXP2101, AW9523, ...) sit on it too, so don't touch their addresses.
+    pub fn m_bus(&mut self) -> &mut I2c<'static, esp_hal::Blocking> {
+        &mut self.i2c
+    }
 }
 
 fn recover_i2c_bus(

@@ -1,5 +1,6 @@
 // M5Stack Unit Mini BPS v1.1 (U090-B), QMP6988 barometric pressure sensor
 
+use crate::read_reg;
 use embedded_hal::{delay::DelayNs, i2c::I2c};
 
 pub const DEFAULT_ADDR: u8 = 0x70;
@@ -144,12 +145,6 @@ impl Calib {
 
         ((wk1 / 32767) >> 11) + self.b00
     }
-}
-
-fn read_reg<I: I2c>(i2c: &mut I, addr: u8, reg: u8) -> Result<u8, I::Error> {
-    let mut buf = [0u8; 1];
-    i2c.write_read(addr, &[reg], &mut buf)?;
-    Ok(buf[0])
 }
 
 #[cfg(test)]
