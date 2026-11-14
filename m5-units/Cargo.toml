@@ -1,0 +1,8 @@
+[package]
+edition.workspace      = true
+name                   = "m5-units"
+rust-version.workspace = true
+version.workspace      = true
+
+[dependencies]
+embedded-hal.workspace = true

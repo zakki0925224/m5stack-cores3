@@ -7,10 +7,10 @@ use esp_hal::{
         cam::{Camera, Config},
     },
     peripherals::{
-        DMA_CH0, GPIO2, GPIO15, GPIO16, GPIO38, GPIO39, GPIO40, GPIO41, GPIO42, GPIO45, GPIO46,
-        GPIO47, GPIO48, LCD_CAM,
+        DMA_CH0, GPIO15, GPIO16, GPIO38, GPIO39, GPIO40, GPIO41, GPIO42, GPIO45, GPIO46, GPIO47,
+        GPIO48, LCD_CAM,
     },
-    time::{Duration, Instant, Rate},
+    time::{Duration, Instant},
 };
 
 pub const FRAME_WIDTH: usize = 320;
@@ -28,7 +28,6 @@ impl Cam {
     pub fn new(
         lcd_cam: LCD_CAM<'static>,
         dma_channel: DMA_CH0<'static>,
-        mclk: GPIO2<'static>,
         pclk: GPIO45<'static>,
         vsync: GPIO46<'static>,
         href: GPIO38<'static>,
@@ -41,11 +40,10 @@ impl Cam {
         d6: GPIO48<'static>,
         d7: GPIO47<'static>,
     ) -> Result<Self> {
-        let config = Config::default().with_frequency(Rate::from_mhz(20));
+        let config = Config::default();
         let lcd_cam = LcdCam::new(lcd_cam);
         let cam = Camera::new(lcd_cam.cam, dma_channel, config)
             .map_err(Error::hal)?
-            .with_master_clock(mclk)
             .with_pixel_clock(pclk)
             .with_vsync(vsync)
             .with_h_enable(href)

@@ -9,7 +9,7 @@ Board support for the M5Stack CoreS3, built from scratch on `esp-hal`.
 cores3 = { git = "https://github.com/zakki0925224/m5stack-cores3", features = ["global-alloc", "panic-handler"] }
 ```
 
-The binary also needs the usual esp-hal setup (not inherited from dependencies): `rust-toolchain.toml` (`channel = "esp"`), `.cargo/config.toml` (Xtensa target, `build-std`), and `build.rs` (`-Tlinkall.x`).
+The binary also needs the usual esp-hal setup (not inherited from dependencies): `rust-toolchain.toml` (`channel = "esp-1.98.1.0"`, installed with `espup install -v 1.98.1.0 -a esp-1.98.1.0`), `.cargo/config.toml` (Xtensa target, `build-std`), and `build.rs` (`-Tlinkall.x`).
 
 ## Development
 

@@ -18,4 +18,5 @@ pub use cores3_core::{color, time};
 pub use embedded_graphics;
 pub use embedded_hal;
 pub use esp_hal;
+pub use m5_units;
 pub use mipidsi;

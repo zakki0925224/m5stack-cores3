@@ -7,9 +7,9 @@ use crate::{
     time::Time,
 };
 use esp_hal::{
-    gpio::{DriveMode, Flex, InputConfig, OutputConfig, Pull},
+    gpio::{DriveMode, Flex, InputConfig, OutputConfig, Pin, Pull},
     i2c::master::{Config as I2cConfig, I2c},
-    peripherals::{GPIO11, GPIO12, Peripherals},
+    peripherals::Peripherals,
 };
 
 pub mod camera;
@@ -22,6 +22,7 @@ pub struct CoreS3 {
     pub camera: camera::Cam,
     speaker: speaker::Speaker,
     i2c: I2c<'static, esp_hal::Blocking>,
+    port_a: I2c<'static, esp_hal::Blocking>,
 }
 
 impl CoreS3 {
@@ -34,6 +35,11 @@ impl CoreS3 {
             .with_sda(sda)
             .with_scl(scl);
 
+        let (scl, sda) = recover_i2c_bus(peripherals.GPIO1, peripherals.GPIO2);
+        let port_a = I2c::new(peripherals.I2C1, I2cConfig::default())?
+            .with_sda(sda)
+            .with_scl(scl);
+
         // power on all sensors
         axp2101::init(&mut i2c)?;
 
@@ -41,6 +47,7 @@ impl CoreS3 {
 
         aw9523::init(&mut i2c)?;
         aw9523::reset_lcd(&mut i2c)?;
+        aw9523::enable_port_a_power(&mut i2c)?;
 
         ltr553::init(&mut i2c)?;
 
@@ -55,7 +62,6 @@ impl CoreS3 {
         let camera = Cam::new(
             peripherals.LCD_CAM,
             peripherals.DMA_CH0,
-            peripherals.GPIO2,
             peripherals.GPIO45,
             peripherals.GPIO46,
             peripherals.GPIO38,
@@ -90,6 +96,7 @@ impl CoreS3 {
             camera,
             speaker,
             i2c,
+            port_a,
         })
     }
 
@@ -172,9 +179,16 @@ impl CoreS3 {
     pub fn set_speaker_mute(&mut self, mute: bool) -> Result<()> {
         aw88298::set_mute(&mut self.i2c, mute)
     }
+
+    pub fn port_a(&mut self) -> &mut I2c<'static, esp_hal::Blocking> {
+        &mut self.port_a
+    }
 }
 
-fn recover_i2c_bus(scl: GPIO11<'static>, sda: GPIO12<'static>) -> (Flex<'static>, Flex<'static>) {
+fn recover_i2c_bus(
+    scl: impl Pin + 'static,
+    sda: impl Pin + 'static,
+) -> (Flex<'static>, Flex<'static>) {
     let mut scl = Flex::new(scl);
     let mut sda = Flex::new(sda);
 
