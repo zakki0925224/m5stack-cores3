@@ -40,15 +40,12 @@ pub fn read_als(i2c: &mut impl I2c) -> Result<u16> {
 }
 
 pub fn read_proximity(i2c: &mut impl I2c) -> Result<u16> {
-    let lo = read(i2c, REG_PS_DATA_0)?;
-    let hi = read(i2c, REG_PS_DATA_0 + 1)?;
-    Ok(u16::from_le_bytes([lo, hi]) & 0x07ff)
+    // burst read so both bytes come from the same sample
+    let mut buf = [0u8; 2];
+    super::read_regs(i2c, ADDR_I2C, REG_PS_DATA_0, &mut buf)?;
+    Ok(u16::from_le_bytes(buf) & 0x07ff)
 }
 
 fn write(i2c: &mut impl I2c, reg: u8, val: u8) -> Result<()> {
     super::write_reg(i2c, ADDR_I2C, reg, val)
-}
-
-fn read(i2c: &mut impl I2c, reg: u8) -> Result<u8> {
-    super::read_reg(i2c, ADDR_I2C, reg)
 }

@@ -17,6 +17,7 @@ const REG_LEDMODE_P1: u8 = 0x13;
 
 const P0_BUS_OUT_EN: u8 = 1 << 1;
 const P1_BOOST_EN: u8 = 1 << 7;
+const P1_RST: u8 = 0b11; // TP_RST | LCD_RST
 
 pub fn init(i2c: &mut impl I2c) -> Result<()> {
     // set output levels first so TP_RST/LCD_RST don't glitch low once enabled below
@@ -35,9 +36,11 @@ pub fn init(i2c: &mut impl I2c) -> Result<()> {
 }
 
 pub fn reset_lcd(i2c: &mut impl I2c) -> Result<()> {
-    write(i2c, REG_OUTPUT_P1, 0x00)?;
+    // read-modify-write: keep other P1 pins (e.g. BOOST_EN)
+    let p1 = read(i2c, REG_OUTPUT_P1)?;
+    write(i2c, REG_OUTPUT_P1, p1 & !P1_RST)?;
     delay_ms(50);
-    write(i2c, REG_OUTPUT_P1, 0x03)?;
+    write(i2c, REG_OUTPUT_P1, p1 | P1_RST)?;
     delay_ms(200);
     Ok(())
 }

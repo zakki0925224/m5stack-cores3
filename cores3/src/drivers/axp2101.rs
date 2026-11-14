@@ -35,7 +35,8 @@ pub fn read_battery_level(i2c: &mut impl I2c) -> Result<i8> {
 }
 
 pub fn is_charging(i2c: &mut impl I2c) -> Result<bool> {
-    Ok(read(i2c, REG_STATUS_2)? & 0x04 != 0)
+    // bits 6:5 = battery current direction: 00 standby, 01 charging, 10 discharging
+    Ok((read(i2c, REG_STATUS_2)? >> 5) & 0b11 == 0b01)
 }
 
 pub fn read_vbus_mv(i2c: &mut impl I2c) -> Result<u16> {

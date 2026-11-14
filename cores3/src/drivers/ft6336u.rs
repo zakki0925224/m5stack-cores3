@@ -16,7 +16,9 @@ pub fn read(i2c: &mut impl I2c) -> Result<Option<TouchPoint>> {
     let mut buf = [0u8; 5];
     super::read_regs(i2c, ADDR_I2C, REG_TD_STATUS, &mut buf)?;
 
-    if buf[0] & 0x0f == 0 {
+    let touches = buf[0] & 0x0f;
+    if touches == 0 || touches > 2 {
+        // max 2 points; larger values are garbage
         return Ok(None);
     }
 
