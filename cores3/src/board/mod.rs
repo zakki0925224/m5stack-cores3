@@ -10,6 +10,7 @@ use esp_hal::{
     gpio::{DriveMode, Flex, InputConfig, OutputConfig, Pin, Pull},
     i2c::master::{Config as I2cConfig, I2c},
     peripherals::Peripherals,
+    uart::{Config as UartConfig, Uart},
 };
 
 pub mod camera;
@@ -23,6 +24,7 @@ pub struct CoreS3 {
     speaker: speaker::Speaker,
     i2c: I2c<'static, esp_hal::Blocking>,
     port_a: I2c<'static, esp_hal::Blocking>,
+    port_c: Uart<'static, esp_hal::Blocking>,
 }
 
 impl CoreS3 {
@@ -91,12 +93,16 @@ impl CoreS3 {
         )?;
         aw88298::init(&mut i2c, speaker::SAMPLE_RATE)?;
 
+        let port_c =
+            Uart::new(peripherals.UART1, UartConfig::default())?.with_tx(peripherals.GPIO17);
+
         Ok(Self {
             display,
             camera,
             speaker,
             i2c,
             port_a,
+            port_c,
         })
     }
 
@@ -182,6 +188,10 @@ impl CoreS3 {
 
     pub fn port_a(&mut self) -> &mut I2c<'static, esp_hal::Blocking> {
         &mut self.port_a
+    }
+
+    pub fn port_c(&mut self) -> &mut Uart<'static, esp_hal::Blocking> {
+        &mut self.port_c
     }
 }
 

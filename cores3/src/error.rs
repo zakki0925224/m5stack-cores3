@@ -87,4 +87,16 @@ impl From<esp_hal::i2c::master::Error> for Error {
     }
 }
 
+impl From<esp_hal::uart::ConfigError> for Error {
+    fn from(err: esp_hal::uart::ConfigError) -> Self {
+        Self::hal(err)
+    }
+}
+
+impl From<esp_hal::uart::IoError> for Error {
+    fn from(err: esp_hal::uart::IoError) -> Self {
+        Self::hal(err)
+    }
+}
+
 pub type Result<T> = core::result::Result<T, Error>;

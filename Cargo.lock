@@ -929,6 +929,7 @@ name = "m5-units"
 version = "0.1.0"
 dependencies = [
  "embedded-hal 1.0.0",
+ "embedded-io 0.7.1",
 ]
 
 [[package]]

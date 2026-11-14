@@ -7,6 +7,7 @@ extern crate std;
 
 pub mod bytebutton;
 pub mod mini_bps;
+pub mod synth;
 
 use embedded_hal::i2c::I2c;
 
